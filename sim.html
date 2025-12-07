@@ -1,0 +1,563 @@
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8"> 
+  <!-- D3 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+<body>
+  <div class="container">
+  <header>
+    <h1>Democracy Trajectory Simulator</h1>
+    <p class="sub">
+  This simulator lets you explore “what-if” questions about democracy:
+  how changes in economic growth and key institutions might affect a
+  country’s democracy level over the next 10 years. It is not a
+  precise forecast, but a way to see plausible ranges and compare
+  different scenarios.
+    </p>
+  </header>
+
+    <!-- factors -->
+<section class="controls">
+
+  <div class="guide-intro">
+    <h3>Start your simulation</h3>
+    <p>
+      Welcome to the Democracy Trajectory Simulator. Follow the steps below to predict 
+      future democracy levels based on economic and institutional changes.
+    </p>
+  </div>
+
+  <hr class="divider">
+
+  <div class="guide-step">
+    <span class="step-badge">1</span>
+    <div class="step-content">
+      <label for="country">Select a Target Country</label>
+      <div class="select-wrapper">
+        <select id="country"></select>
+      </div>
+      <p class="step-hint">Pick a country to set the baseline democracy score.</p>
+    </div>
+  </div>
+
+  <div class="guide-step">
+    <span class="step-badge">2</span>
+    <div class="step-content">
+      <label>Apply a "What-If" Scenario (Optional)</label>
+      <div class="scenario-btns">
+        <button class="preset-btn" onclick="applyScenario('mccarthyism')">US McCarthyism</button>  <!-- AI told me to hook this button up with the linked function -->
+        <button class="preset-btn" onclick="applyScenario('new_deal')">US New Deal</button>
+        <button class="preset-btn" onclick="applyScenario('high_growth')">China Econ Miracle</button>
+      </div>
+      <p class="step-hint">Click a button to instantly apply historical parameters, or manually adjust sliders below.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <p class="slider-global-hint">
+  For all sliders, moving <strong>right</strong> means improving conditions
+  (higher growth, stronger rule of law, more freedom), and moving
+  <strong>left</strong> means deterioration relative to today.
+  </p>
+
+    <div class="sliders-grid"> <label class="slider-item"> <!--Ai helped me with the custimization of sliders-->
+        <div class="slider-header">
+          <span>GDP growth</span>
+          <span id="gdpVal" class="val-display">2.0%</span>
+        </div>
+        <input id="gdp" type="range" min="-3" max="8" step="0.5" value="2" /> 
+      </label>
+
+      <label class="slider-item">
+        <div class="slider-header">
+          <span>Level of Equality</span>
+          <span id="ineqVal" class="val-display">0.000</span>
+        </div>
+        <input id="ineq" type="range" min="-0.03" max="0.03" step="0.005" value="0" />
+      </label>
+
+      <label class="slider-item">
+        <div class="slider-header">
+          <span>Rule of Law </span>
+          <span id="ruleVal" class="val-display">0.000</span>
+        </div>
+        <input id="rule" type="range" min="-0.05" max="0.05" step="0.005" value="0" />
+      </label>
+
+      <label class="slider-item">
+        <div class="slider-header">
+          <span>Freedom of Expression</span>
+          <span id="polyVal" class="val-display">0.000</span>
+        </div>
+        <input id="poly" type="range" min="-0.05" max="0.05" step="0.005" value="0" />
+      </label>
+    </div>
+
+    <div class="actions-group"> 
+      <span class="lock-hint">
+        Tip: Lock current view to compare changes overlay.
+      </span>
+
+      <button id="lockBtn" class="secondary-btn">Lock</button>
+      <button id="run" class="primary-btn">Run Simulation</button>
+    </div>
+  </section>
+
+  <!-- chart -->
+  <section class="chart-wrap">
+    <h3 id="chart-title">Loading...</h3>
+      Simulated level of democracy over the next 10 years 
+    <svg id="chart" width="920" height="400"
+         role="img"
+         aria-label="Fan chart of simulated democracy index"></svg>
+    <div class="legend">
+      <span class="band90">10–90% interval</span>
+      <span class="band50">25–75% interval</span>
+      <span class="median">Median path</span>
+      <span class="locked-legend">Locked Scenario (Comparison)</span>
+    </div>
+
+<div class="chart-caption">
+      <h4><i class="fas fa-info-circle"></i> Understanding the Graph</h4>
+      <p>
+        The vertical axis shows the democracy score from <strong>0 (Authoritarian)</strong> to <strong>1 (Liberal Democracy)</strong>.
+        <br><br>
+        This chart displays the result of <strong>1,000 simulations</strong>.    <!-- ai helped me with the color to make it more visually powerful -->
+        The <strong style="color:#88419d">Purple Line</strong> represents the median (most central) outcome. 
+        The <strong style="color:#fa9fb5">Pink Band</strong> captures the middle 50% of possibilities, while the wider 
+        <strong style="color:#fec44f">Orange Band</strong> covers 80% of all potential trajectories.
+        <br>
+        <em>Note: Wider bands indicate higher uncertainty about the future.</em>
+      </p>
+    </div>
+    
+  </section>
+
+<!-- methods -->
+<section class="methods">
+  <h2>How this prototype works</h2>
+  <p>
+    We estimate a simple dynamic panel model on V-Dem data:
+    <code>
+      libdem_t = α + ρ·libdem_{t-1}
+      + β_gdp·gdp_growth_t
+      + β_eq·Δeq_t
+      + β_rule·Δrule_t
+      + β_poly·Δpoly_t
+      + ε_t
+    </code>.
+    Here Δeq, Δrule and Δpoly are year-to-year changes in V-Dem’s
+    equality, rule of law, and electoral democracy indices.
+    The estimated coefficients are exported from Python as
+    <code>data/coeffs.json</code> and loaded into this page.
+    For each scenario, the simulator runs 1,000 Monte Carlo paths over
+    10 years and plots the median and 10/25/75/90&nbsp;percentile bands
+    as a fan chart.
+  </p>
+</section>
+
+
+<section id="references" class="main">
+  <div class="container">
+    <div class="content">
+      <header class="major">
+        <h2>Data Sources</h2>
+      </header>
+      
+      <ul class="ref-list">
+        <li>
+          <strong>V-Dem Institute (2024).</strong> 
+          <em>Varieties of Democracy (V-Dem) Project.</em> 
+          <a href="https://www.v-dem.net" target="_blank">https://www.v-dem.net</a>
+        </li>
+        <li>
+          <strong>The World Bank.</strong> 
+          <em>World Development Indicators (GDP Growth).</em> 
+          <a href="https://data.worldbank.org" target="_blank">https://data.worldbank.org</a>
+        </li>
+      </ul>
+      
+    </div>
+  </div>
+</section>
+
+  </div>
+
+  <script>
+  // make it none value to start
+  let COEFFS = null;
+  let BASELINE = null;
+  let LOCKED_DATA = null;
+  let LOCKED_META = null;
+
+  // load two data files 
+  window.addEventListener('DOMContentLoaded', () => {
+    Promise.all([
+      fetch('./data/coeffs.json').then(r => r.json()),
+      fetch('./data/baseline.json').then(r => r.json())
+    ]).then(([coeffs, baseline]) => {
+      COEFFS = coeffs;
+      BASELINE = baseline;
+      init();
+    }).catch(err => {
+      console.error('Error loading data:', err);
+      alert('Failed to load coeffs/baseline JSON. Check paths.');
+    });
+  });
+
+  // country select options
+  function populateCountrySelect() {
+    const select = document.getElementById('country');
+    BASELINE.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.code;
+      opt.textContent = d.name;
+      select.appendChild(opt);
+    });
+  }
+
+  // get the starting value based on country code
+  function getStartValue(code) {
+    const rec = BASELINE.find(d => d.code === code);
+    if (!rec) return 0.5;
+    const libKey = Object.keys(rec).find(k => k.startsWith('libdem'));
+    return rec[libKey];
+  }
+
+  // to update the labels  
+  function syncLabels() {
+    const gdpEl  = document.getElementById('gdp');
+    const ineqEl = document.getElementById('ineq');
+    const ruleEl = document.getElementById('rule');
+    const polyEl = document.getElementById('poly');
+
+    document.getElementById('gdpVal').textContent =
+      Number(gdpEl.value).toFixed(1) + '%';
+
+    document.getElementById('ineqVal').textContent =
+      Number(ineqEl.value).toFixed(3);
+
+    document.getElementById('ruleVal').textContent =
+      Number(ruleEl.value).toFixed(3);
+
+    document.getElementById('polyVal').textContent =
+      Number(polyEl.value).toFixed(3);
+  }
+  // preset scenarios data are suggested by AI 
+  const SCENARIOS = {
+      'mccarthyism': {
+        code: 'USA', 
+        gdp: 1.5,     
+        ineq: 0.005,  
+        rule: -0.045, 
+        poly: -0.05   
+      },
+      'new_deal': {
+        code: 'USA',
+        gdp: 3.0,     
+        ineq: 0.03,   
+        rule: 0.02,   
+        poly: 0.01    
+      },
+      'high_growth': {
+        code: 'CHN',   
+        gdp: 8.0,     
+        ineq: 0.00,   
+        rule: 0.00,
+        poly: 0.00
+      }
+    };
+
+    function applyScenario(key) {
+    const data = SCENARIOS[key];
+    if (!data) return;
+
+    if (data.code) {
+      const select = document.getElementById('country');
+      for (let i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === data.code) {
+          select.selectedIndex = i;
+          break;
+        }
+      }
+    }
+
+    document.getElementById('gdp').value = data.gdp;
+    document.getElementById('ineq').value = data.ineq;
+    document.getElementById('rule').value = data.rule;
+    document.getElementById('poly').value = data.poly;
+
+    syncLabels();
+    
+    document.getElementById('run').click();
+  }
+
+  const randn = (function() {
+    let z2 = null;
+    return function() {
+      if (z2 !== null) {
+        const tmp = z2;
+        z2 = null;
+        return tmp;
+      }
+      let z1 = null;
+      let u1 = 0;
+      let u2 = 0;
+      let s = 0;
+      do {
+        u1 = Math.random() * 2 - 1; // (-1, 1)
+        u2 = Math.random() * 2 - 1; // (-1, 1)
+        s = u1 * u1 + u2 * u2;
+      } while (s >= 1 || s === 0);
+      
+      const r = Math.sqrt(-2 * Math.log(s) / s);
+      z1 = u1 * r;
+      z2 = u2 * r;
+      return z1;
+    };
+  })();
+
+  function simulatePaths(start, gdp, deq, drule, dpoly, years = 10, runs = 1000) {
+    const { 
+      alpha, 
+      rho, 
+      b_gdp, 
+      b_eq, 
+      b_rule, 
+      b_poly, 
+      sigma_e  // 
+    } = COEFFS;
+
+    if (typeof sigma_e === 'undefined') {
+      console.error('Error: "sigma_e"');
+      alert('data missing');
+      return []; 
+    }
+    const deterministic_part =
+      alpha +
+      b_gdp  * gdp +
+      b_eq   * deq +
+      b_rule * drule +
+      b_poly * dpoly;
+
+    const paths = [];
+
+    for (let r = 0; r < runs; r++) {
+      let x = start;
+      const series = [{ year: 0, value: x }];
+
+      for (let t = 1; t <= years; t++) {
+        const error_term = sigma_e * randn(); 
+
+        x = rho * x + deterministic_part + error_term;
+        
+        x = Math.max(0, Math.min(1, x)); 
+
+        series.push({ year: t, value: x });
+      }
+      paths.push(series);
+    }
+  
+    return paths;
+  }
+
+  function quantilesFromPaths(paths) {
+    if (!paths || paths.length === 0) return [];
+    const years = paths[0].length;
+    const out = [];
+
+    for (let i = 0; i < years; i++) {
+      const vals = paths.map(p => p[i].value).sort((a, b) => a - b);
+
+      const q = qv => {
+        const idx = (vals.length - 1) * qv;
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        if (lo === hi) return vals[lo];
+        return vals[lo] + (idx - lo) * (vals[hi] - vals[lo]);
+      };
+
+      out.push({
+        year: i,
+        q10: q(0.10),
+        q25: q(0.25),
+        q50: q(0.50),
+        q75: q(0.75),
+        q90: q(0.90)
+      });
+    }
+    return out;
+  }
+
+
+
+  function createChart() {
+    const svg = d3.select('#chart');
+    svg.selectAll('*').remove();
+
+    // set size 
+    const container = d3.select('.chart-wrap').node();
+    const styles = window.getComputedStyle(container);
+    const paddingLeft = parseFloat(styles.paddingLeft);
+    const paddingRight = parseFloat(styles.paddingRight);
+    const containerWidth = container.getBoundingClientRect().width;
+    const svgWidth = containerWidth - paddingLeft - paddingRight;
+    const svgHeight = svgWidth * (400 / 920); 
+    svg.attr('width', svgWidth);
+    svg.attr('height', svgHeight);
+
+    const margin = { top: 40, right: 40, bottom: 60, left: 90 };
+    const width  = +svg.attr('width')  - margin.left - margin.right;
+    const height = +svg.attr('height') - margin.top  - margin.bottom;
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // set axis 
+    const x = d3.scaleLinear().domain([0, 10]).range([0, width]);
+    const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+
+    const xAxis = d3.axisBottom(x).ticks(10).tickFormat(d => d === 0 ? 'Now' : `+${d}`);
+    const yAxis = d3.axisLeft(y).ticks(6);
+
+    g.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${height})`).call(xAxis);
+    g.append('g').attr('class', 'y-axis').call(yAxis);
+
+    g.append("text")
+      .attr("class", "axis-label")
+      .attr("x", width / 2)
+      .attr("y", height + 55)
+      .attr("text-anchor", "middle")
+      .text("Years from now");
+
+    g.append("text")
+      .attr("class", "axis-label")
+      .attr("x", -height / 2)
+      .attr("y", -55)
+      .attr("transform", "rotate(-90)")
+      .attr("text-anchor", "middle")
+      .text("Democracy index (0–1)");
+
+    
+    const area90 = d3.area().x(d => x(d.year)).y0(d => y(d.q10)).y1(d => y(d.q90)).curve(d3.curveMonotoneX);
+    const area50 = d3.area().x(d => x(d.year)).y0(d => y(d.q25)).y1(d => y(d.q75)).curve(d3.curveMonotoneX);
+    const lineMed = d3.line().x(d => x(d.year)).y(d => y(d.q50)).curve(d3.curveMonotoneX);
+
+    // Layer 1 locked layer the logic is inspired by ai 
+    const lockedGroup = g.append('g').attr('class', 'locked-layer');
+  
+    const lockBand90 = lockedGroup.append('path').attr('class', 'locked-band90');
+    const lockBand50 = lockedGroup.append('path').attr('class', 'locked-band50');
+    const lockMedian = lockedGroup.append('path').attr('class', 'locked-median');
+
+    const activeGroup = g.append('g').attr('class', 'active-layer');
+    const actBand90 = activeGroup.append('path').attr('class', 'band90');
+    const actBand50 = activeGroup.append('path').attr('class', 'band50');
+    const actMedian = activeGroup.append('path').attr('class', 'median');
+
+    return function update(currentData, lockedData) {
+
+      if (currentData) {
+        actBand90.datum(currentData).attr('d', area90);
+        actBand50.datum(currentData).attr('d', area50);
+        actMedian.datum(currentData).attr('d', lineMed);
+      }
+
+      if (lockedData) {
+        lockBand90.datum(lockedData).attr('d', area90).style('display', 'block');
+        lockBand50.datum(lockedData).attr('d', area50).style('display', 'block');
+        lockMedian.datum(lockedData).attr('d', lineMed).style('display', 'block');
+      } else {
+        lockBand90.style('display', 'none');
+        lockBand50.style('display', 'none');
+        lockMedian.style('display', 'none');
+      }
+    };
+  }
+
+function render(updateChart) {
+    const selectEl = document.getElementById('country');
+    const countryName = selectEl.options[selectEl.selectedIndex].text;
+    
+    
+    const titleEl = document.getElementById('chart-title');
+    
+    if (LOCKED_DATA && LOCKED_META) {
+        const meta = LOCKED_META; 
+        const infoText = `Details: GDP ${meta.gdp}%, Equality ${meta.ineq}, Rule of law ${meta.rule}, Freedom of expression ${meta.poly}`;
+        
+        titleEl.innerHTML = `
+          <div>Running: <span style="color:#007bff">${countryName}</span></div>
+          <div class="chart-subtitle">
+             vs. Locked: <strong>${meta.country}</strong> <span style="font-weight:400">(${infoText})</span>
+          </div>
+        `;
+    } else {
+        titleEl.textContent = `Current Simulation: ${countryName}`;
+    }
+
+    const start = getStartValue(selectEl.value);
+    const gdp   = +document.getElementById('gdp').value;
+    const deq   = +document.getElementById('ineq').value;
+    const drule = +document.getElementById('rule').value;
+    const dpoly = +document.getElementById('poly').value;
+    
+    const paths = simulatePaths(start, gdp, deq, drule, dpoly, 10, 1000);
+    const currentData = quantilesFromPaths(paths);
+
+    updateChart(currentData, LOCKED_DATA);
+
+    return currentData;
+  }
+
+  function init() {
+    populateCountrySelect();
+    syncLabels();
+    const updateChart = createChart();
+
+    let lastResult = render(updateChart);
+
+    document.getElementById('run').addEventListener('click', () => {
+      lastResult = render(updateChart);
+    });
+
+    ['gdp', 'ineq', 'rule', 'poly'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        syncLabels();
+        lastResult = render(updateChart); 
+      });
+    });
+
+    // to show locked data 
+    const lockBtn = document.getElementById('lockBtn');
+    lockBtn.addEventListener('click', () => {
+        if (LOCKED_DATA === null) {
+
+            LOCKED_DATA = JSON.parse(JSON.stringify(lastResult));
+            
+            const selectEl = document.getElementById('country');
+            LOCKED_META = {
+                country: selectEl.options[selectEl.selectedIndex].text,
+                gdp: document.getElementById('gdp').value,
+                ineq: document.getElementById('ineq').value,
+                rule: document.getElementById('rule').value,
+                poly: document.getElementById('poly').value
+            };
+            
+            lockBtn.textContent = "Unlock";
+            lockBtn.classList.add('active'); 
+        } else {
+            LOCKED_DATA = null;
+            LOCKED_META = null; 
+            
+            lockBtn.textContent = "Lock";
+            lockBtn.classList.remove('active'); 
+        }
+        render(updateChart);
+    });
+  }
+</script>
+</body>
+</html>
